@@ -4,6 +4,16 @@
 
 Código em C99, independente de emuladores comerciais, dividido entre um núcleo portátil do Motorola 68000 e um programa de diagnóstico para Saturn usando [libyaul](https://github.com/yaul-org/libyaul).
 
+## Teste Sega Saturn — BIN + CUE gerados
+
+**Build v0.1.0-dev:** compilação SH-2/libyaul concluída com sucesso no [GitHub Actions](https://github.com/FernandoPeralta199x/MegaOrbit/actions/runs/39529218491). A imagem de disco foi convertida para **BIN raw MODE1/2352 + CUE**, com 266 setores, e passou nas verificações estruturais de cabeçalho Saturn e ISO9660.
+
+[Baixar os dois arquivos da compilação](https://github.com/FernandoPeralta199x/MegaOrbit/actions/runs/39529218491) na seção *Artifacts* (faça login no GitHub, se necessário).
+
+Abra **MegaOrbit.cue**, mantendo **MegaOrbit.bin** na mesma pasta, no Mednafen/Beetle Saturn ou em outro emulador Saturn compatível. O menu de teste em PT-BR possui seleção de diagnóstico, opções, saves demonstrativos e créditos; use D-Pad para navegar, A/C para entrar e B para voltar.
+
+**Status de validação:** o código compilou para SH-2 e o disco passou nos verificadores; a execução visual com BIOS num emulador Saturn ou hardware real ainda precisa de teste manual. Não há execução de ROMs Mega Drive comerciais ou acesso ao cartão SD.
+
 ## O que funciona nesta entrega
 
 - Reset da CPU 68000 por vetores: A7 em ROM[0..3] e PC em ROM[4..7].
@@ -16,7 +26,7 @@ Código em C99, independente de emuladores comerciais, dividido entre um núcleo
 
 ## Não implementado
 
-VDP do Mega Drive, Z80, YM2612, PSG, controle, DMA, timers, interrupções, SRAM, mapper, leitura de ROM do CD, scheduler completo e a maior parte das instruções 68000. **Ainda não executa jogos comerciais.**
+VDP do Mega Drive, Z80, YM2612, PSG, controles Mega Drive emulados, DMA, timers, interrupções, SRAM, mapper, leitura de ROM do CD, scheduler completo e a maior parte das instruções 68000. **Ainda não executa jogos comerciais.**
 
 ## Testar no PC (Linux, MSYS2 ou WSL)
 
@@ -39,9 +49,9 @@ Resultado esperado: `RESULTADO: 12/12 testes aprovados`.
    make
    ```
 
-4. O nome-base pretendido do diagnóstico é `megaorbit-diag`. Teste a imagem gerada em um emulador Saturn compatível e depois em hardware real.
+4. O nome-base atual da demonstração é `megaorbit-demo`. Teste a imagem gerada em um emulador Saturn compatível e depois em hardware real.
 
-**Importante:** o código C99 portátil foi testado em computador; a build para SH-2/libyaul **ainda não foi validada** neste ambiente.
+**Importante:** a compilação cruzada SH-2/libyaul e a geração BIN/CUE foram realizadas no GitHub Actions; a emulação executável no Saturn ainda precisa de verificação.
 
 ## Diagnóstico Saturn esperado
 
