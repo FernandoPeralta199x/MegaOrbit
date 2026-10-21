@@ -1,0 +1,43 @@
+name: Build Sega Saturn BIN/CUE
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/saturn-build.yml"
+      - "saturn/**"
+      - "core/**"
+      - "ui/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build Saturn disc using Yaul toolchain
+        run: |
+          docker run --rm -v "$PWD:/work" -w /work/saturn ijacquez/yaul:1.0.15 bash -lc 'set -eu; make'
+      - name: Inspect output
+        run: |
+          find saturn -maxdepth 4 -type f -printf '%p %s bytes\n' | sort
+      - name: Create distributable disc BIN/CUE
+        run: |
+          python3 scripts/iso_to_bin_cue.py --src saturn --dest release --name MegaOrbit
+      - name: Validate resulting disc image
+        run: |
+          python3 scripts/validate_disc.py release/MegaOrbit.bin release/MegaOrbit.cue
+      - name: Upload emulator-ready image
+        uses: actions/upload-artifact@v4
+        with:
+          name: MegaOrbit-Saturn-BIN-CUE
+          path: |
+            release/MegaOrbit.bin
+            release/MegaOrbit.cue
+          if-no-files-found: error
+          retention-days: 30
