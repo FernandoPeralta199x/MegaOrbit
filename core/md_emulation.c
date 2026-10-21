@@ -18,7 +18,8 @@ int md_z80_step(md_z80_t *z){
  case 0xc3:lo=fetch(z);hi=fetch(z);z->pc=(uint16_t)(((unsigned)hi<<8)|lo);z->cycles+=10;return 1;
  case 0x10:{int8_t d=(int8_t)fetch(z);z->b--;
   if(z->b){z->pc=(uint16_t)(z->pc+d);z->cycles+=13;}
-  else z->cycles+=8;return 1;}
+  else { z->cycles+=8; }
+  return 1;}
  case 0x76:z->halted=1;z->cycles+=4;return 1;
  default:z->halted=1;return -1;
  }
