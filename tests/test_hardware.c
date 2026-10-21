@@ -9,6 +9,28 @@ static md_ym_lite_t f;
 static int16_t audio[1024];
 static uint16_t screen[64u*48u];
 #define CHECK(x) do{if(!(x)){printf("FAIL line %d: %s\n",__LINE__,#x);return 1;}}while(0)
+static int test_vdp_bus_adapter(void)
+{
+    static md_bus_t mb;
+    md_vdp_init(&v);
+    md_bus_init(&mb,NULL,0u);
+    md_bus_attach_video(&mb,&v,md_vdp_bus_read16,md_vdp_bus_write16);
+    CHECK(md_write16(&mb,0xC00004u,0x8F04u)==MC_OK);
+    CHECK(v.regs[15]==4u);
+    CHECK(md_write16(&mb,0xC00004u,0x4000u)==MC_OK);
+    CHECK(md_write16(&mb,0xC00004u,0x0000u)==MC_OK);
+    CHECK(md_write16(&mb,0xC00000u,0x1234u)==MC_OK);
+    CHECK(v.vram[0]==0x12u && v.vram[1]==0x34u);
+    CHECK(md_write16(&mb,0xA11100u,0x0100u)==MC_OK);
+    CHECK(md_write16(&mb,0xA11200u,0x0100u)==MC_OK);
+    {
+        uint16_t x;
+        CHECK(md_read16(&mb,0xA11100u,&x)==MC_OK && x==0x0100u);
+        CHECK(md_read16(&mb,0xC00004u,&x)==MC_OK && x==v.status);
+    }
+    return 0;
+}
+
 int main(void){
  unsigned i,nonzero=0,colors=0;
  md_z80_init(&z);
@@ -41,6 +63,7 @@ int main(void){
  md_vdp_render(&v,screen,64,64,48);
  for(i=1;i<64u*48u;i++)if(screen[i]!=screen[0])colors++;
  CHECK(colors>100);
+ CHECK(test_vdp_bus_adapter()==0);
  printf("PASS: Z80 subset, PSG, FM approximation, SCSP sample generation and tiled VDP\n");
  return 0;
 }

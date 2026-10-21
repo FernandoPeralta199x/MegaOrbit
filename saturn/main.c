@@ -74,6 +74,8 @@ static void do_sonic(void){
  sonic_last_opcode=0;sonic_status=MC_ERR_UNMAPPED;
  if(!sonic_valid)return;
  md_bus_init(&bus,rom,SONIC_ROM_SIZE);
+ md_vdp_init(&vdp);
+ md_bus_attach_video(&bus,&vdp,md_vdp_bus_read16,md_vdp_bus_write16);
  sonic_status=m68k_reset(&cpu,&bus);
  sonic_start_pc=cpu.pc;
  sonic_start_sp=cpu.a[7];
