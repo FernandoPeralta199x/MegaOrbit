@@ -50,7 +50,7 @@ void ui_handle(ui_state_t *u,ui_input_t in){
  if(in==UI_INPUT_LEFT||in==UI_INPUT_RIGHT){
   if(u->page==UI_OPTIONS){u->tab=(unsigned char)((u->tab+(in==UI_INPUT_LEFT?3u:1u))%4u);u->cursor=0;}
   else if(u->page==UI_PAUSE&&u->cursor==3u)
-    u->save_slot=(unsigned char)((u->save_slot+(in==UI_INPUT_LEFT?7u:1u))%9u+1u);
+    u->save_slot=(unsigned char)(in==UI_INPUT_LEFT?(u->save_slot==1u?9u:u->save_slot-1u):(u->save_slot==9u?1u:u->save_slot+1u));
   return;
  }
  if(in==UI_INPUT_UP||in==UI_INPUT_DOWN){
