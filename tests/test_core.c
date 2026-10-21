@@ -83,7 +83,7 @@ static int test_bra_backward(void)
 static int test_bra_word(void)
 {
     EXPECT(setup()); word_at(8, 0x6000u); word_at(10, 0x0004u);
-    EXPECT(m68k_step(&cpu, &bus) == MC_OK && cpu.pc == 16u);
+    EXPECT(m68k_step(&cpu, &bus) == MC_OK && cpu.pc == 14u);
     return 1;
 }
 
@@ -211,6 +211,27 @@ static int test_rom_boot_entry(void)
     return 1;
 }
 
+static int test_new_move_add_dbf(void)
+{
+    EXPECT(setup());
+    cpu.a[4] = 0xFF0020u;
+    EXPECT(md_write16(&bus, 0xFF0020u, 0x8000u) == MC_OK);
+    word_at(8, 0x3014u);
+    word_at(10, 0x2C40u);
+    word_at(12, 0x4E66u);
+    word_at(14, 0xD047u);
+    word_at(16, 0x51C9u);
+    word_at(18, 0xFFFCu);
+    cpu.d[7]=1u; cpu.d[1]=1u;
+    EXPECT(m68k_step(&cpu, &bus) == MC_OK && (cpu.d[0] & 0xFFFFu) == 0x8000u);
+    EXPECT((cpu.sr & 0x8u) != 0u);
+    EXPECT(m68k_step(&cpu, &bus) == MC_OK && cpu.a[6] == 0x8000u);
+    EXPECT(m68k_step(&cpu, &bus) == MC_OK && cpu.usp == 0x8000u);
+    EXPECT(m68k_step(&cpu, &bus) == MC_OK && (cpu.d[0] & 0xFFFFu) == 0x8001u);
+    EXPECT(m68k_step(&cpu, &bus) == MC_OK && cpu.d[1] == 0u && cpu.pc == 14u);
+    return 1;
+}
+
 int main(void)
 {
     const struct { const char *name; int (*fn)(void); } tests[] = {
@@ -225,7 +246,8 @@ int main(void)
         {"LEA/MOVEM", test_lea_pc_and_movem},
         {"ANDI + TMSS", test_andi_move_and_tmss},
         {"MOVE.B displacement", test_move_byte_disp},
-        {"Boot probe Sonic sem ROM", test_rom_boot_entry}
+        {"Boot probe Sonic sem ROM", test_rom_boot_entry},
+        {"MOVE/ADD/DBF e USP", test_new_move_add_dbf}
     };
     unsigned passed = 0;
     size_t i;

@@ -28,6 +28,7 @@ typedef struct {
     uint32_t d[8];
     uint32_t a[8];
     uint32_t pc;
+    uint32_t usp;   /* User stack pointer when SR supervisor flag is set */
     uint32_t cycles;
     uint16_t sr;
     uint16_t last_opcode;

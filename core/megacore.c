@@ -204,7 +204,9 @@ m68k_step(m68k_t *cpu, md_bus_t *bus)
         } else {
             displacement = (int32_t)(int8_t)d8;
         }
-        target = (cpu->pc + (uint32_t)displacement) & BUS_MASK;
+        /* The Bcc/BSR base PC is the address immediately after the
+           opcode, NOT after the optional word extension. */
+        target = (cpu->pc - (d8 == 0u ? 2u : 0u) + (uint32_t)displacement) & BUS_MASK;
         if ((op & 0xFF00u) == 0x6100u) {
             r = push32(cpu, bus, cpu->pc);
             if (r != MC_OK) return fail(cpu, r);
@@ -289,7 +291,8 @@ m68k_step(m68k_t *cpu, md_bus_t *bus)
         case 15: taken = z || (n != v); break;           /* BLE */
         default: break;
         }
-        if (taken) cpu->pc = (cpu->pc + (uint32_t)displacement) & BUS_MASK;
+        if (taken) cpu->pc = (cpu->pc - (d8 == 0u ? 2u : 0u) +
+            (uint32_t)displacement) & BUS_MASK;
         cpu->cycles += taken ? 10u : (d8 == 0u ? 12u : 8u);
         return MC_OK;
     }
@@ -417,6 +420,85 @@ m68k_step(m68k_t *cpu, md_bus_t *bus)
                      (result == 0u ? SR_ZERO : 0u) |
                      (sign_new ? SR_NEGATIVE : 0u));
         cpu->cycles += 4u;
+        return MC_OK;
+    }
+    /* MOVE.W (An),Dn */
+    if ((op & 0xF1F8u) == 0x3010u) {
+        unsigned src = op & 7u, dest = (op >> 9u) & 7u;
+        uint16_t value;
+        r = md_read16(bus, cpu->a[src], &value);
+        if (r != MC_OK) return fail(cpu, r);
+        cpu->d[dest] = (cpu->d[dest] & 0xFFFF0000u) | value;
+        cpu->sr = (uint16_t)((cpu->sr & 0xFFF0u) |
+                             (value == 0 ? SR_ZERO : 0u) |
+                             ((value & 0x8000u) ? SR_NEGATIVE : 0u));
+        cpu->cycles += 8u;
+        return MC_OK;
+    }
+    /* MOVE.W Dn,(An) */
+    if ((op & 0xF1F8u) == 0x3080u) {
+        unsigned dest = (op >> 9u) & 7u, src = op & 7u;
+        uint16_t value = (uint16_t)cpu->d[src];
+        r = md_write16(bus, cpu->a[dest], value);
+        if (r != MC_OK) return fail(cpu, r);
+        cpu->sr = (uint16_t)((cpu->sr & 0xFFF0u) |
+                             (value == 0 ? SR_ZERO : 0u) |
+                             ((value & 0x8000u) ? SR_NEGATIVE : 0u));
+        cpu->cycles += 8u;
+        return MC_OK;
+    }
+    /* MOVEA.L Dn,An (condition-code register must be preserved). */
+    if ((op & 0xF1F8u) == 0x2040u) {
+        cpu->a[(op >> 9u) & 7u] = cpu->d[op & 7u];
+        cpu->cycles += 4u;
+        return MC_OK;
+    }
+    /* MOVE An,USP (68000 privileged instruction, no flags). */
+    if ((op & 0xFFF8u) == 0x4E60u) {
+        if ((cpu->sr & 0x2000u) == 0u)
+            return fail(cpu, MC_ERR_OPCODE); /* TODO: privilege exception */
+        cpu->usp = cpu->a[op & 7u];
+        cpu->cycles += 4u;
+        return MC_OK;
+    }
+    /* MOVE USP,An (68000 privileged instruction, no flags). */
+    if ((op & 0xFFF8u) == 0x4E68u) {
+        if ((cpu->sr & 0x2000u) == 0u)
+            return fail(cpu, MC_ERR_OPCODE);
+        cpu->a[op & 7u] = cpu->usp;
+        cpu->cycles += 4u;
+        return MC_OK;
+    }
+    /* ADD.W Dn,Dn, 16-bit flags. */
+    if ((op & 0xF1F8u) == 0xD040u) {
+        unsigned src = op & 7u, dest = (op >> 9u) & 7u;
+        unsigned old = cpu->d[dest] & 0xFFFFu, arg = cpu->d[src] & 0xFFFFu;
+        unsigned val = (old + arg) & 0xFFFFu;
+        int overflow = (((~(old ^ arg)) & (old ^ val)) & 0x8000u) != 0u;
+        int carry = old + arg > 0xFFFFu;
+        cpu->d[dest] = (cpu->d[dest] & 0xFFFF0000u) | val;
+        cpu->sr = (uint16_t)((cpu->sr & 0xFFE0u) |
+            (carry ? (SR_CARRY | 0x10u) : 0u) |
+            (overflow ? SR_OVERFLOW : 0u) |
+            (val == 0u ? SR_ZERO : 0u) |
+            ((val & 0x8000u) ? SR_NEGATIVE : 0u));
+        cpu->cycles += 4u;
+        return MC_OK;
+    }
+    /* DBF Dn,d16 (address base = extension-word address). */
+    if ((op & 0xFFF8u) == 0x51C8u) {
+        unsigned dest = op & 7u;
+        uint16_t offset;
+        uint32_t ext_addr = cpu->pc;
+        uint16_t count;
+        r = fetch16(cpu, bus, &offset);
+        if (r != MC_OK) return fail(cpu, r);
+        count = (uint16_t)(cpu->d[dest] - 1u);
+        cpu->d[dest] = (cpu->d[dest] & 0xFFFF0000u) | count;
+        if (count != 0xFFFFu) {
+            cpu->pc = (ext_addr + (uint32_t)(int32_t)(int16_t)offset) & BUS_MASK;
+            cpu->cycles += 10u;
+        } else cpu->cycles += 14u;
         return MC_OK;
     }
     /* Deliberate fail-fast instead of pretending to emulate illegal exceptions. */
