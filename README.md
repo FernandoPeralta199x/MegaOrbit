@@ -38,7 +38,7 @@ Abra **MegaOrbit.cue**, mantendo **MegaOrbit.bin** na mesma pasta, no Mednafen/B
 
 ## Não implementado
 
-VDP do Mega Drive, Z80, YM2612, PSG, controles Mega Drive emulados, DMA, timers, interrupções, SRAM, mapper, leitura de ROM do CD, scheduler completo e a maior parte das instruções 68000. **Ainda não executa jogos comerciais.**
+Implementações **completas** do VDP Mega Drive, Z80, YM2612, PSG, controles Mega Drive emulados, DMA, timers, interrupções, SRAM, mapper, leitura de ROM do CD, scheduler completo e a maior parte das instruções 68000. Há protótipos parciais de Z80/VDP/PSG/FM/SCSP, sem a precisão ou sincronização necessárias. **Ainda não executa jogos comerciais.**
 
 ## Testar no PC (Linux, MSYS2 ou WSL)
 
@@ -61,7 +61,7 @@ Resultado esperado: `RESULTADO: 12/12 testes aprovados`.
    make
    ```
 
-4. O nome-base atual da demonstração é `megaorbit-demo`. Teste a imagem gerada em um emulador Saturn compatível e depois em hardware real.
+4. O nome-base atual da demonstração é `megaorbit-demo`. O workflow gera `MegaOrbit.bin` + `MegaOrbit.cue` a partir da ISO libyaul. Teste a imagem no emulador Saturn e depois em hardware real.
 
 **Importante:** a compilação cruzada SH-2/libyaul e a geração BIN/CUE foram realizadas no GitHub Actions; a emulação executável no Saturn ainda precisa de verificação.
 
