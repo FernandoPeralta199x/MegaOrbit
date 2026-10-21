@@ -4,10 +4,10 @@ endif
 include $(YAUL_INSTALL_ROOT)/share/build.pre.mk
 BUILTIN_ASSETS+= assets/sonic_slot.bin;asset_sonic_slot
 SH_PROGRAM:= megaorbit-demo
-SH_SRCS:= main.c scsp_audio.c ../core/megacore.c ../core/md_emulation.c ../core/md_vdp.c ../ui/menu.c
+SH_SRCS:= main.c scsp_audio.c ../core/homebrew.c ../core/megacore.c ../core/md_emulation.c ../core/md_vdp.c ../ui/menu.c
 SH_CFLAGS+= -Os -I. -I../core -I../ui
 SH_LDFLAGS+=
-IP_VERSION:= V0.400
+IP_VERSION:= V0.500
 IP_RELEASE_DATE:= 20261020
 IP_AREAS:= JTUBKAEL
 IP_PERIPHERALS:= JAMKST

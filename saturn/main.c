@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <string.h>
 #include "megacore.h"
+#include "homebrew.h"
 #include "md_emulation.h"
 #include "md_vdp.h"
 #include "scsp_audio.h"
@@ -18,6 +19,16 @@ static unsigned sonic_valid,sonic_steps;
 static uint32_t sonic_start_pc,sonic_end_pc,sonic_start_sp;
 static uint16_t sonic_last_opcode;
 static mc_result_t sonic_status;
+/* Mini-game source code is original 68000 machine code in core/homebrew.c.
+ * The Saturn supplies the UI and input/audio/video devices.
+ * This is a proof of CPU-driven input, not an emulated Genesis VDP game. */
+static uint8_t paddle_rom[ORBIT_CART_SIZE];
+static unsigned game_ticks,game_score,game_target,game_collision_latch,game_fail;
+static m68k_t quick_cpu;
+static uint8_t quick_ram[MD_RAM_SIZE],quick_io[0x20],quick_tmss[4];
+static unsigned quick_valid,quick_slot;
+static ui_page_t quick_page;
+static unsigned quick_score,quick_target;
 static smpc_peripheral_digital_t pad;
 static ui_state_t ui;
 static md_bus_t bus;
@@ -71,6 +82,54 @@ static void do_sonic(void){
  }
  sonic_end_pc=cpu.pc;
  sonic_last_opcode=cpu.last_opcode;
+ ui.diagnostic_ran=1u;
+}
+static void homebrew_start(void){
+ orbit_cart_build(paddle_rom);
+ md_bus_init(&bus,paddle_rom,ORBIT_CART_SIZE);
+ game_fail=(m68k_reset(&cpu,&bus)!=MC_OK);
+ game_ticks=0;game_score=0;game_target=14;game_collision_latch=0;
+ ui.diagnostic_ran=1u;
+}
+static void homebrew_frame(void){
+ unsigned i;unsigned position;
+ if(game_fail)return;
+ bus.io[3]=0x7fu;
+ if(pad.held.button.left)bus.io[3]&=(uint8_t)~4u;
+ if(pad.held.button.right)bus.io[3]&=(uint8_t)~8u;
+ for(i=0;i<7u;i++){
+  if(m68k_step(&cpu,&bus)!=MC_OK){game_fail=1u;return;}
+ }
+ game_ticks++;
+ position=(cpu.d[1]&0xffffu)%26u;
+ if(position==game_target){
+  if(!game_collision_latch){game_score++;game_target=(game_target+7u)%26u;}
+  game_collision_latch=1;
+ }else game_collision_latch=0;
+}
+static void save_quick(void){
+ quick_cpu=cpu;
+ memcpy(quick_ram,bus.ram,MD_RAM_SIZE);
+ memcpy(quick_io,bus.io,sizeof(bus.io));
+ memcpy(quick_tmss,bus.tmss,sizeof(bus.tmss));
+ quick_slot=ui.save_slot;
+ quick_page=ui.paused_from;
+ quick_score=game_score;quick_target=game_target;
+ quick_valid=1u;
+ ui.status="SALVO NA RAM (TEMPORARIO)";
+}
+static void load_quick(void){
+ if(!quick_valid||quick_slot!=ui.save_slot||quick_page!=ui.paused_from){
+  ui.status="SLOT SEM SAVE COMPATIVEL";
+  return;
+ }
+ cpu=quick_cpu;
+ memcpy(bus.ram,quick_ram,MD_RAM_SIZE);
+ memcpy(bus.io,quick_io,sizeof(bus.io));
+ memcpy(bus.tmss,quick_tmss,sizeof(bus.tmss));
+ game_score=quick_score;game_target=quick_target;
+ game_fail=0;
+ ui.status="SAVE RESTAURADO DA RAM";
 }
 static void do_z80(void){
  unsigned i;
@@ -92,77 +151,93 @@ static void do_vdp(void){
  }
 }
 static void display(void){
- unsigned i,begin=0u,end,n;
+ unsigned i,begin=0,end,n;
  dbgio_printf("\033[H\033[2J");
- dbgio_printf("MEGA ORBIT V0.4.0-DEV\n");
- dbgio_printf("GENESIS / MEGA DRIVE EMULATOR\n");
- dbgio_printf("VERSION 1.0.0 [MENU]\n");
- dbgio_printf("GRIFFONBR\n");
- dbgio_printf("----------------------------\n");
- dbgio_printf("MENU E DIAGNOSTICO\n\n");
- dbgio_printf("[%s]\n",ui_page_name(ui.page));
- if(ui.page==UI_OPTIONS)dbgio_printf("ABA: %s   ESQ/DIR\n",ui_tab_label(ui.tab));
- dbgio_printf("\n");
- if(ui.page==UI_MAIN||ui.page==UI_ROMS||ui.page==UI_OPTIONS||ui.page==UI_PAUSE){
-  n=ui_item_count(&ui);end=n;
-  if(n>6u){
-   begin=(ui.cursor>=5u)?ui.cursor-5u:0u;
-   end=begin+6u;
-   if(end>n)end=n;
-  }
+ dbgio_printf(" MEGA ORBIT  /  GRIFFONBR\n");
+ dbgio_printf(" GENESIS / MEGA DRIVE\n");
+ dbgio_printf(" v0.5 DEV  |  SAROO-STYLE\n");
+ dbgio_printf("============================\n");
+ if(ui.page==UI_MAIN){
+  dbgio_printf("  BIBLIOTECA E SISTEMA\n\n");
+  for(i=0;i<ui_item_count(&ui);i++)
+   dbgio_printf(" %c %s\n",i==ui.cursor?'>':' ',ui_item_label(&ui,i));
+  dbgio_printf("\n----------------------------\n");
+  dbgio_printf("3 ITENS NO SELETOR DE JOGOS\n");
+ }else if(ui.page==UI_ROMS){
+  dbgio_printf(" /ROMS/MEGA/    [3 ITENS]\n");
+  dbgio_printf("----------------------------\n");
+  for(i=0;i<ui_item_count(&ui);i++)
+   dbgio_printf(" %c %s\n",i==ui.cursor?'>':' ',ui_item_label(&ui,i));
+  dbgio_printf("\n DETALHES:\n");
+  if(ui.cursor==0)dbgio_printf("HOMEBREW | 68000 | CONTROLE\n");
+  else if(ui.cursor==1)dbgio_printf("SONIC | 512 KB | USA/EUR\n");
+  else dbgio_printf("OPCODES + RAM + CPU TESTE\n");
+ }else if(ui.page==UI_OPTIONS){
+  dbgio_printf(" CONFIGURACOES / %s\n",ui_tab_label(ui.tab));
+  dbgio_printf("----------------------------\n");
+  n=ui_item_count(&ui);begin=ui.cursor>5u?ui.cursor-5u:0u;
+  end=(begin+6u)<n?begin+6u:n;
   for(i=begin;i<end;i++)
-   dbgio_printf("%c %s\n",ui.cursor==i?'>':' ',ui_item_label(&ui,i));
-  if(n>6u)dbgio_printf(" %u-%u / %u\n",begin+1u,end,n);
- }
- if(ui.page==UI_OPTIONS){
-  if(ui.tab==0u){
-   dbgio_printf("\nTILE/CRAM TESTE: %s\n",vdp_ok?"PASS":"FAIL");
-   dbgio_printf("PIXEL HASH: %08lX\n",(unsigned long)vdp_sum);
-   dbgio_printf("NAO RENDERIZA JOGOS AINDA\n");
-  }else if(ui.tab==1u){
-   dbgio_printf("\nA/C: TOCAR AUDIO TESTE\n");
-   dbgio_printf("B: PARAR E VOLTAR\n");
-   dbgio_printf("SCSP: %s\n",sound_active?"ATIVO (TESTE)":"PARADO");
-  }else if(ui.tab==2u){
-   dbgio_printf("\nZ80 TESTE: %s\n",z80_ok?"PASS":"FAIL");
-   dbgio_printf("Z80 A=%02X PC=%04X\n",(unsigned)z80.a,(unsigned)z80.pc);
-  }else dbgio_printf("\nCONTROLE SATURN: PORTA 1\n");
- }
- if(ui.page==UI_DIAGNOSTIC){
-  dbgio_printf("STATUS 68000: %s\n",diagnostic_ok?"PASS":"FAIL");
-  dbgio_printf("PASSOS %u/5 PC=%08lX\n",diagnostic_steps,(unsigned long)cpu.pc);
-  dbgio_printf("D0 %08lX D1 %08lX\n",(unsigned long)cpu.d[0],(unsigned long)cpu.d[1]);
-  dbgio_printf("L+R+START: MENU DE PAUSA\n");
- }
- if(ui.page==UI_PAUSE)dbgio_printf("\nSTATUS: %s\n",ui.status?ui.status:"");
- if(ui.page==UI_SAVES)dbgio_printf("SAVE STATES NAO DISPONIVEIS\n");
- if(ui.page==UI_CREDITS)dbgio_printf("LIBYAUL + PICODRIVE (REFERENCIA)\n\nNAO AFILIADO A SEGA.\n");
- if(ui.page==UI_ROMS){
-  dbgio_printf("\nDIRETORIO: /ROMS/MEGA/\n");
-  dbgio_printf("SONIC THE HEDGEHOG (USA/EUR)\n");
-  dbgio_printf("512 KB - REGIAO JUE\n");
-  dbgio_printf("OUTROS JOGOS: ARQUIVOS AUSENTES\n");
- }
- if(ui.page==UI_GAME_TEST){
-  if(sonic_valid){
-   dbgio_printf("SONIC (USA, EUROPE)\n");
-   dbgio_printf("ROM: CARREGADA, 512 KB\n");
-   dbgio_printf("REGIAO: JUE\n");
-   dbgio_printf("PC RESET: %08lX\n",(unsigned long)sonic_start_pc);
-   dbgio_printf("SP RESET: %08lX\n",(unsigned long)sonic_start_sp);
+   dbgio_printf(" %c %s\n",ui.cursor==i?'>':' ',ui_item_label(&ui,i));
+  dbgio_printf("ITEM %u/%u - ESQ/DIR ABA\n",ui.cursor+1u,n);
+  if(ui.tab==0u)dbgio_printf("VDP TILES TEST: %s\n",vdp_ok?"PASS":"FAIL");
+  if(ui.tab==1u)dbgio_printf("A TOCAR | SCSP: %s\n",sound_active?"ATIVO":"PARADO");
+  if(ui.tab==2u)dbgio_printf("Z80 TEST: %s\n",z80_ok?"PASS":"FAIL");
+ }else if(ui.page==UI_HOMEBREW){
+  char bar[28];
+  unsigned x=(cpu.d[1]&0xffffu)%26u;
+  for(i=0;i<26u;i++)bar[i]='.';
+  bar[game_target]='*';
+  bar[x]='O';
+  bar[26]='\0';
+  dbgio_printf(" ORBIT PADDLE (68000)\n");
+  dbgio_printf("----------------------------\n");
+  dbgio_printf("ESQ / DIR: COLETE O ASTRO\n\n");
+  dbgio_printf("|%s|\n",bar);
+  dbgio_printf("PONTOS: %u   FRAMES: %u\n",game_score,game_ticks);
+  dbgio_printf("CPU PC: %06lX\n",(unsigned long)cpu.pc);
+  dbgio_printf("CPU D1: %04X\n",(unsigned)(cpu.d[1]&0xffffu));
+  dbgio_printf("STATUS: %s\n",game_fail?"CPU PARADA":"EXECUTANDO");
+  dbgio_printf("\nL+R+START: PAUSA\n");
+ }else if(ui.page==UI_PAUSE){
+  dbgio_printf("        JOGO PAUSADO\n");
+  dbgio_printf("----------------------------\n");
+  for(i=0;i<ui_item_count(&ui);i++)
+   dbgio_printf(" %c %s\n",ui.cursor==i?'>':' ',ui_item_label(&ui,i));
+  dbgio_printf("----------------------------\n");
+  dbgio_printf(" %s\n",ui.status?ui.status:"");
+  dbgio_printf("SAVE: RAM / 1 SLOT ATIVO\n");
+  dbgio_printf("NAO GRAVA EM MEMORIA SATURN\n");
+ }else if(ui.page==UI_GAME_TEST){
+  dbgio_printf(" SONIC - DIAGNOSTICO\n");
+  dbgio_printf("----------------------------\n");
+  if(!sonic_valid)dbgio_printf("ROM AUSENTE NESTE DISCO\n");
+  else {
+   dbgio_printf("ROM 512 KB / JUE\n");
+   dbgio_printf("PC INICIO: %08lX\n",(unsigned long)sonic_start_pc);
    dbgio_printf("PASSOS: %u / 512\n",sonic_steps);
-   dbgio_printf("PC STOP: %08lX\n",(unsigned long)sonic_end_pc);
+   dbgio_printf("PC FIM: %08lX\n",(unsigned long)sonic_end_pc);
    dbgio_printf("OPCODE: %04X\n",(unsigned)sonic_last_opcode);
-   dbgio_printf("STATUS: %s\n",mc_result_name(sonic_status));
-   dbgio_printf("JOGO AINDA NAO JOGAVEL\n");
-  }else{
-   dbgio_printf("ROM NAO EMBUTIDA NESTE DISCO\n");
-   dbgio_printf("USE PACOTE PRIVADO COM ROM\n");
+   dbgio_printf("ERRO: %s\n",mc_result_name(sonic_status));
+   dbgio_printf("SONIC NAO ESTA JOGAVEL\n");
   }
+ }else if(ui.page==UI_DIAGNOSTIC){
+  dbgio_printf("TESTE 68000: %s\n",diagnostic_ok?"PASS":"FAIL");
+  dbgio_printf("PASSOS: %u / 5\n",diagnostic_steps);
+  dbgio_printf("PC: %08lX\n",(unsigned long)cpu.pc);
+  dbgio_printf("D0: %08lX\n",(unsigned long)cpu.d[0]);
+  dbgio_printf("L+R+START: PAUSA\n");
+ }else if(ui.page==UI_SAVES){
+  dbgio_printf("SAVE VOLATIL: RAM APENAS\n");
+  dbgio_printf("NO JOGO: L+R+START\n");
+  dbgio_printf("SALVAMENTO PERMANENTE: NAO\n");
+ }else if(ui.page==UI_CREDITS){
+  dbgio_printf("GRIFFONBR - MEGA ORBIT\n");
+  dbgio_printf("LIBYAUL / PICODRIVE REF.\n");
+  dbgio_printf("PROJETO NAO AFILIADO A SEGA\n");
  }
- dbgio_printf("\n----------------------------\n");
- dbgio_printf("D-PAD NAVEGAR  A/C OK  B VOLTAR\n");
- dbgio_printf("VDP/Z80/FM AINDA INCOMPLETOS\n");
+ dbgio_printf("\n============================\n");
+ dbgio_printf("A/C OK   B VOLTAR  D-PAD\n");
 }
 int main(void){
  dbgio_init();dbgio_dev_default_init(DBGIO_DEV_VDP2_ASYNC);dbgio_dev_font_load();
@@ -186,10 +261,12 @@ int main(void){
    else if(ui.page==UI_OPTIONS&&ui.tab==0u){do_vdp();}
    else ui_handle(&ui,UI_INPUT_ACCEPT);
   }
-  if(ui.page==UI_DIAGNOSTIC&&(!ui.diagnostic_ran||last!=UI_DIAGNOSTIC))
+  if(ui.page==UI_DIAGNOSTIC&&!ui.diagnostic_ran)
    do_diagnostic();
-  if(ui.page==UI_GAME_TEST&&last!=UI_GAME_TEST)
+  if(ui.page==UI_GAME_TEST&&!ui.diagnostic_ran)
    do_sonic();
+  if(ui.page==UI_HOMEBREW&&!ui.diagnostic_ran)homebrew_start();
+  if(ui.page==UI_HOMEBREW&&last==UI_HOMEBREW)homebrew_frame();
   if(sound_active&&ui.page!=UI_OPTIONS){megaorbit_scsp_stop();sound_active=0;}
   display();dbgio_flush();vdp2_sync();vdp2_sync_wait();
  }
