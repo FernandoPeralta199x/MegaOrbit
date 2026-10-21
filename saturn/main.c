@@ -28,7 +28,7 @@ static m68k_t quick_cpu;
 static uint8_t quick_ram[MD_RAM_SIZE],quick_io[0x20],quick_tmss[4];
 static unsigned quick_valid,quick_slot;
 static ui_page_t quick_page;
-static unsigned quick_score,quick_target;
+static unsigned quick_score,quick_target,quick_ticks,quick_latch;
 static smpc_peripheral_digital_t pad;
 static ui_state_t ui;
 static md_bus_t bus;
@@ -115,6 +115,7 @@ static void save_quick(void){
  quick_slot=ui.save_slot;
  quick_page=ui.paused_from;
  quick_score=game_score;quick_target=game_target;
+ quick_ticks=game_ticks;quick_latch=game_collision_latch;
  quick_valid=1u;
  ui.status="SALVO NA RAM (TEMPORARIO)";
 }
@@ -128,6 +129,7 @@ static void load_quick(void){
  memcpy(bus.io,quick_io,sizeof(bus.io));
  memcpy(bus.tmss,quick_tmss,sizeof(bus.tmss));
  game_score=quick_score;game_target=quick_target;
+ game_ticks=quick_ticks;game_collision_latch=quick_latch;
  game_fail=0;
  ui.status="SAVE RESTAURADO DA RAM";
 }
@@ -255,7 +257,15 @@ int main(void){
    if(sound_active){megaorbit_scsp_stop();sound_active=0;}
    ui_handle(&ui,UI_INPUT_BACK);
   }else if(pad.pressed.button.a||pad.pressed.button.c){
-   if(ui.page==UI_OPTIONS&&ui.tab==1u){
+   if(ui.page==UI_PAUSE&&(ui.cursor==1u||ui.cursor==2u)){
+    /* Save states are RAM-only for the 68000 diagnostic/homebrew.
+       No false success or permanent-memory write is reported. */
+    if(ui.paused_from==UI_HOMEBREW||ui.paused_from==UI_DIAGNOSTIC){
+     if(ui.cursor==1u)save_quick();
+     else load_quick();
+    }else ui.status="SAVE DE SONIC INDISPONIVEL";
+   }
+   else if(ui.page==UI_OPTIONS&&ui.tab==1u){
     megaorbit_scsp_play_test();sound_active=1;
    }else if(ui.page==UI_OPTIONS&&ui.tab==2u){do_z80();}
    else if(ui.page==UI_OPTIONS&&ui.tab==0u){do_vdp();}
