@@ -1,8 +1,19 @@
 # MegaOrbit 0.5.0-dev — teste jogável e progresso de emulação
 
+## Melhorias incrementais posteriores ao primeiro pacote 0.5
+
+- O 68000 ganhou MOVE.W para/de registradores, MOVEA.L, MOVE USP/An, ADD.W e DBF; também recebeu MOVE.B e MOVE.L com pós-incremento. Os testes correspondentes foram adicionados.
+- Corrigido o deslocamento relativo das instruções BRA/Bcc com extensão de 16 bits.
+- Inicializada a interface de vídeo do barramento de 24 bits: endereços C00000..C0001F agora encaminham chamadas a registradores e dados básicos do VDP emulado, enquanto A11100 e A11200 armazenam BUSREQ/RESET do Z80.
+- Sonic é testado usando seu cabeçalho e suas instruções reais apenas no disco de uso individual; ainda não há gráficos ou som do jogo.
+- O menu estilo Saroo agora possui tela bitmap de baixa resolução no VDP2, realce da seleção e escurecimento do fundo ao pausar.
+- `core/state.c` implementa save/load transitório e validado por integridade e ROM; rejeita restauração entre cartuchos diferentes e corrupção.
+- `scripts/patch_private_rom.py` permite colocar ROM pessoal no BIN local, recalculando ECC/EDC. O CI faz teste com ROM *sintética não comercial*.
+- Os testes atuais do 68000 totalizam **20/20** e o workflow confere também homebrew, estado, menu e imagem CD Saturn. Resultado de execução visual/sonora em Mednafen ainda precisa de confirmação manual.
+
 ## Resultado verificado por CI
 
-- 18/18 testes de instruções e barramento 68000 aprovados.
+- 20/20 testes de instruções e barramento 68000 aprovados.
 - Testes extras de Z80 parcial, PSG, FM aproximada e VDP parcial aprovados.
 - Teste automatizado de cartucho 68000 original, com leitura do D-Pad virtual, aprovado.
 - Testes de navegação, pausa, slots e verificação de snapshots em RAM aprovados.
