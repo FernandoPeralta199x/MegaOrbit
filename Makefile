@@ -12,9 +12,19 @@ build/test_homebrew: core/megacore.c core/homebrew.c core/homebrew.h tests/test_
 	mkdir -p build
 	$(CC) $(CFLAGS) -o $@ core/megacore.c core/homebrew.c tests/test_homebrew.c
 
-test: build/test_core build/test_hardware build/test_homebrew
+build/test_state: core/megacore.c core/state.c core/homebrew.c tests/test_state.c
+	mkdir -p build
+	$(CC) $(CFLAGS) -o $@ core/megacore.c core/state.c core/homebrew.c tests/test_state.c
+
+build/test_menu: ui/menu.c ui/menu.h tests/test_menu.c
+	mkdir -p build
+	$(CC) $(CFLAGS) -o $@ ui/menu.c tests/test_menu.c
+
+test: build/test_core build/test_hardware build/test_homebrew build/test_state build/test_menu
 	./build/test_core
 	./build/test_hardware
 	./build/test_homebrew
+	./build/test_state
+	./build/test_menu
 clean:
 	rm -rf build

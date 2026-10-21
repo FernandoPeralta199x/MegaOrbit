@@ -6,6 +6,7 @@
 #include <string.h>
 #include "megacore.h"
 #include "homebrew.h"
+#include "state.h"
 #include "md_emulation.h"
 #include "md_vdp.h"
 #include "scsp_audio.h"
@@ -25,8 +26,7 @@ static mc_result_t sonic_status;
  * This is a proof of CPU-driven input, not an emulated Genesis VDP game. */
 static uint8_t paddle_rom[ORBIT_CART_SIZE];
 static unsigned game_ticks,game_score,game_target,game_collision_latch,game_fail;
-static m68k_t quick_cpu;
-static uint8_t quick_ram[MD_RAM_SIZE],quick_io[0x20],quick_tmss[4];
+static md_state_t quick_state;
 static unsigned quick_valid,quick_slot;
 static ui_page_t quick_page;
 static unsigned quick_score,quick_target,quick_ticks,quick_latch;
@@ -109,10 +109,7 @@ static void homebrew_frame(void){
  }else game_collision_latch=0;
 }
 static void save_quick(void){
- quick_cpu=cpu;
- memcpy(quick_ram,bus.ram,MD_RAM_SIZE);
- memcpy(quick_io,bus.io,sizeof(bus.io));
- memcpy(quick_tmss,bus.tmss,sizeof(bus.tmss));
+ if(!md_state_save(&quick_state,&cpu,&bus)){ui.status="ERRO AO SALVAR";return;}
  quick_slot=ui.save_slot;
  quick_page=ui.paused_from;
  quick_score=game_score;quick_target=game_target;
@@ -125,10 +122,7 @@ static void load_quick(void){
   ui.status="SLOT SEM SAVE COMPATIVEL";
   return;
  }
- cpu=quick_cpu;
- memcpy(bus.ram,quick_ram,MD_RAM_SIZE);
- memcpy(bus.io,quick_io,sizeof(bus.io));
- memcpy(bus.tmss,quick_tmss,sizeof(bus.tmss));
+ if(!md_state_load(&quick_state,&cpu,&bus)){ui.status="SAVE CORROMPIDO OU ROM DIFERENTE";return;}
  game_score=quick_score;game_target=quick_target;
  game_ticks=quick_ticks;game_collision_latch=quick_latch;
  game_fail=0;
