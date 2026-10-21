@@ -378,6 +378,47 @@ m68k_step(m68k_t *cpu, md_bus_t *bus)
         cpu->cycles += 28u;
         return MC_OK;
     }
+    /* MOVE.B (xxx).L,Dn, used by homebrew cart to read controller port. */
+    if ((op & 0xF1FFu) == 0x1039u) {
+        unsigned dest = (op >> 9u) & 7u;
+        uint32_t addr;
+        uint8_t data;
+        r = fetch32(cpu, bus, &addr);
+        if (r != MC_OK) return fail(cpu, r);
+        r = md_read8(bus, addr, &data);
+        if (r != MC_OK) return fail(cpu, r);
+        cpu->d[dest] = (cpu->d[dest] & 0xFFFFFF00u) | data;
+        cpu->sr = (uint16_t)((cpu->sr & 0xFFF0u) |
+                     (data == 0 ? SR_ZERO : 0u) |
+                     ((data & 0x80u) ? SR_NEGATIVE : 0u));
+        cpu->cycles += 16u;
+        return MC_OK;
+    }
+    /* ADDQ.W/SUBQ.W #1..8,Dn (EA is Dn direct, for a homebrew game).
+       Flags follow 68000 16-bit ALU semantics; carry and extend agree. */
+    if ((op & 0xF0F8u) == 0x5040u) {
+        unsigned n = (op >> 9u) & 7u;
+        unsigned amt = n ? n : 8u;
+        unsigned dest = op & 7u;
+        int sub = (op & 0x0100u) != 0u;
+        uint32_t old = cpu->d[dest] & 0xFFFFu;
+        uint32_t result = (sub ? old - amt : old + amt) & 0xFFFFu;
+        unsigned sign_old = (old & 0x8000u) != 0u;
+        unsigned sign_new = (result & 0x8000u) != 0u;
+        unsigned sign_arg = (amt & 0x8000u) != 0u;
+        int carry = sub ? (old < amt) : (old + amt > 0xFFFFu);
+        int overflow = sub ?
+            ((sign_old != sign_arg) && (sign_new != sign_old)) :
+            ((sign_old == sign_arg) && (sign_new != sign_old));
+        cpu->d[dest] = (cpu->d[dest] & 0xFFFF0000u) | result;
+        cpu->sr = (uint16_t)((cpu->sr & 0xFFE0u) |
+                     (carry ? (SR_CARRY | 0x10u) : 0u) |
+                     (overflow ? SR_OVERFLOW : 0u) |
+                     (result == 0u ? SR_ZERO : 0u) |
+                     (sign_new ? SR_NEGATIVE : 0u));
+        cpu->cycles += 4u;
+        return MC_OK;
+    }
     /* Deliberate fail-fast instead of pretending to emulate illegal exceptions. */
     return fail(cpu, MC_ERR_OPCODE);
 }
