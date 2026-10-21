@@ -20,6 +20,8 @@ typedef struct {
     const uint8_t *rom;
     size_t rom_size;
     uint8_t ram[MD_RAM_SIZE];
+    uint8_t io[0x20];       /* Mega Drive controller IO address block */
+    uint8_t tmss[4];        /* TMSS four-byte register */
 } md_bus_t;
 
 typedef struct {
