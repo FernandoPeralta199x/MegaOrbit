@@ -9,7 +9,7 @@ static uint32_t fnv(uint32_t h,const void *data,size_t len){
 }
 static uint32_t rom_hash(const md_bus_t *bus){
  uint32_t hash=2166136261u;
- size_t n=bus->rom_size<256u?bus->rom_size:256u;
+ size_t n=bus->rom_size;
  if(bus->rom!=NULL&&n)hash=fnv(hash,bus->rom,n);
  return hash;
 }
