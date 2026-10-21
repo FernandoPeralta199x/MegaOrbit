@@ -16,12 +16,20 @@ typedef enum {
     MC_ERR_HALTED
 } mc_result_t;
 
+typedef mc_result_t (*md_video_read16_fn)(void *device,uint32_t address,uint16_t *out);
+typedef mc_result_t (*md_video_write16_fn)(void *device,uint32_t address,uint16_t data);
+
 typedef struct {
     const uint8_t *rom;
     size_t rom_size;
     uint8_t ram[MD_RAM_SIZE];
     uint8_t io[0x20];       /* Mega Drive controller IO address block */
     uint8_t tmss[4];        /* TMSS four-byte register */
+    uint16_t z80_busreq;
+    uint16_t z80_reset;
+    void *video_device;
+    md_video_read16_fn video_read16;
+    md_video_write16_fn video_write16;
 } md_bus_t;
 
 typedef struct {
@@ -37,6 +45,8 @@ typedef struct {
 } m68k_t;
 
 void md_bus_init(md_bus_t *bus, const uint8_t *rom, size_t rom_size);
+void md_bus_attach_video(md_bus_t *bus,void *device,
+                         md_video_read16_fn reader,md_video_write16_fn writer);
 mc_result_t md_read8(const md_bus_t *bus, uint32_t address, uint8_t *value);
 mc_result_t md_read16(const md_bus_t *bus, uint32_t address, uint16_t *value);
 mc_result_t md_read32(const md_bus_t *bus, uint32_t address, uint32_t *value);

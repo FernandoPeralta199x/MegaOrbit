@@ -20,6 +20,13 @@ md_bus_init(md_bus_t *bus, const uint8_t *rom, size_t rom_size)
     bus->io[7] = 0x7Fu; /* Controller port C, unpressed */
 }
 
+void md_bus_attach_video(md_bus_t *bus,void *device,
+    md_video_read16_fn reader,md_video_write16_fn writer)
+{
+    bus->video_device=device;
+    bus->video_read16=reader;
+    bus->video_write16=writer;
+}
 mc_result_t
 md_read8(const md_bus_t *bus, uint32_t address, uint8_t *value)
 {
@@ -48,7 +55,14 @@ md_read16(const md_bus_t *bus, uint32_t address, uint16_t *value)
 {
     uint8_t hi, lo;
     mc_result_t r;
+    address &= BUS_MASK;
     if (address & 1u) return MC_ERR_ADDRESS;
+    if (address == 0x00A11100u) {*value = bus->z80_busreq;return MC_OK;}
+    if (address == 0x00A11200u) {*value = bus->z80_reset;return MC_OK;}
+    if (address >= 0x00C00000u && address <= 0x00C0001Eu) {
+        if (bus->video_read16 == NULL) return MC_ERR_UNMAPPED;
+        return bus->video_read16(bus->video_device,address,value);
+    }
     r = md_read8(bus, address, &hi);
     if (r != MC_OK) return r;
     r = md_read8(bus, address + 1u, &lo);
@@ -90,8 +104,15 @@ mc_result_t
 md_write16(md_bus_t *bus, uint32_t address, uint16_t value)
 {
     mc_result_t r;
+    address &= BUS_MASK;
     if (address & 1u) return MC_ERR_ADDRESS;
-    /* All currently writable memory is RAM, so a paired write is safe. */
+    if (address == 0x00A11100u) {bus->z80_busreq=value;return MC_OK;}
+    if (address == 0x00A11200u) {bus->z80_reset=value;return MC_OK;}
+    if (address >= 0x00C00000u && address <= 0x00C0001Eu) {
+        if (bus->video_write16 == NULL) return MC_ERR_UNMAPPED;
+        return bus->video_write16(bus->video_device,address,value);
+    }
+    /* Remaining writable memory: RAM, TMSS, controller I/O. */
     if ((address & BUS_MASK) < MD_RAM_START &&
         !(((address & BUS_MASK) >= 0x00A10000u && (address & BUS_MASK) <= 0x00A1001Eu) ||
           ((address & BUS_MASK) >= 0x00A14000u && (address & BUS_MASK) <= 0x00A14002u)))
