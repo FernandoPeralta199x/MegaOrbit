@@ -137,7 +137,8 @@ void megaorbit_ui_background_selection(const ui_state_t *ui){
  if(index<9u &&
     (ui->page==UI_MAIN || ui->page==UI_ROMS ||
      ui->page==UI_OPTIONS || ui->page==UI_PAUSE)){
-  unsigned y=48u+index*8u;
+  /* Main menu has a 2-line heading; list begins at line 8 (64 px). */
+  unsigned y=(ui->page==UI_MAIN?64u:48u)+index*8u;
   rect(3u,y,317u,y+8u,21u);
   rect(3u,y,6u,y+8u,20u);
  }
