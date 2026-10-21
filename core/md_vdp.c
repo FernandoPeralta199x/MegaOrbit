@@ -1,6 +1,6 @@
 #include "md_vdp.h"
 #include <string.h>
-void md_vdp_init(md_vdp_t *v){memset(v,0,sizeof(*v));v->regs[15]=2;}
+void md_vdp_init(md_vdp_t *v){memset(v,0,sizeof(*v));v->regs[15]=2;v->status=0x3400u;}
 void md_vdp_ctrl(md_vdp_t *v,uint16_t x){
  if(!v->pending){
   if((x&0xc000u)==0x8000u){unsigned r=(x>>8)&31u;v->regs[r]=(uint8_t)x;return;}
@@ -57,5 +57,41 @@ void md_vdp_render(const md_vdp_t *v,uint16_t *out,unsigned stride,unsigned w,un
   uint8_t index=(fx&1u)?(v->vram[off]&15u):(v->vram[off]>>4);
   unsigned palette=((e>>9)&48u)|index;
   out[y*stride+x]=rgb(v->cram[palette&63u]);
+ }
+}
+
+/* First-stage VDP port adapter. NO scanline scheduler or DMA yet.
+   This implements register writes and VRAM/CRAM/VSRAM data port access,
+   with a boot-time status value. It must not be advertised as an accurate VDP.
+*/
+mc_result_t md_vdp_bus_read16(void *device,uint32_t addr,uint16_t *out){
+ md_vdp_t *v=(md_vdp_t *)device;
+ if(v==NULL||out==NULL)return MC_ERR_UNMAPPED;
+ switch(addr&0x1cu){
+ case 0u: {
+  unsigned offset=v->address,ix=offset>>1;
+  if((v->code&15u)==0u){
+   *out=(uint16_t)(((uint16_t)v->vram[offset]<<8)|v->vram[(offset+1u)&65535u]);
+  }else if((v->code&15u)==8u){
+   *out=v->cram[ix&63u];
+  }else *out=0u;
+  v->address=(uint16_t)(v->address+v->regs[15]);
+  return MC_OK;
+ }
+ case 4u: {
+  *out=v->status;
+  v->pending=0u;
+  return MC_OK;
+ }
+ default:return MC_ERR_UNMAPPED;
+ }
+}
+mc_result_t md_vdp_bus_write16(void *device,uint32_t addr,uint16_t value){
+ md_vdp_t *v=(md_vdp_t *)device;
+ if(v==NULL)return MC_ERR_UNMAPPED;
+ switch(addr&0x1cu){
+ case 0u:md_vdp_data(v,value);return MC_OK;
+ case 4u:md_vdp_ctrl(v,value);return MC_OK;
+ default:return MC_ERR_UNMAPPED;
  }
 }
