@@ -522,6 +522,52 @@ m68k_step(m68k_t *cpu, md_bus_t *bus)
         } else cpu->cycles += 14u;
         return MC_OK;
     }
+    /* MOVE.B (An)+,Dn: byte postincrement uses 2 bytes for A7. */
+    if ((op & 0xF1F8u) == 0x1018u) {
+        unsigned src = op & 7u, dest = (op >> 9u) & 7u;
+        uint8_t value;
+        r = md_read8(bus, cpu->a[src], &value);
+        if (r != MC_OK) return fail(cpu, r);
+        cpu->a[src] = (cpu->a[src] + (src == 7u ? 2u : 1u)) & BUS_MASK;
+        cpu->d[dest] = (cpu->d[dest] & 0xFFFFFF00u) | value;
+        cpu->sr = (uint16_t)((cpu->sr & 0xFFF0u) |
+                     (value == 0u ? SR_ZERO : 0u) |
+                     ((value & 0x80u) ? SR_NEGATIVE : 0u));
+        cpu->cycles += 8u;
+        return MC_OK;
+    }
+    /* MOVE.L (An)+,(Am): used by Mega Drive boot routines to transfer
+       tables of control command words to the VDP. */
+    if ((op & 0xF1F8u) == 0x2098u) {
+        unsigned src = op & 7u, dest = (op >> 9u) & 7u;
+        uint32_t value;
+        r = md_read32(bus,cpu->a[src],&value);
+        if (r != MC_OK) return fail(cpu,r);
+        r = md_write32(bus,cpu->a[dest],value);
+        if (r != MC_OK) return fail(cpu,r);
+        cpu->a[src] = (cpu->a[src] + 4u) & BUS_MASK;
+        cpu->sr = (uint16_t)((cpu->sr & 0xFFF0u) |
+                     (value == 0u ? SR_ZERO : 0u) |
+                     ((value & 0x80000000u) ? SR_NEGATIVE : 0u));
+        cpu->cycles += 20u;
+        return MC_OK;
+    }
+    /* MOVE.B (An)+,(Am)+, including A7 byte alignment behavior. */
+    if ((op & 0xF1F8u) == 0x10D8u) {
+        unsigned src = op & 7u, dest = (op >> 9u) & 7u;
+        uint8_t value;
+        r = md_read8(bus,cpu->a[src],&value);
+        if (r != MC_OK) return fail(cpu,r);
+        r = md_write8(bus,cpu->a[dest],value);
+        if (r != MC_OK) return fail(cpu,r);
+        cpu->a[src] = (cpu->a[src]+(src == 7u ? 2u : 1u)) & BUS_MASK;
+        cpu->a[dest] = (cpu->a[dest]+(dest == 7u ? 2u : 1u)) & BUS_MASK;
+        cpu->sr = (uint16_t)((cpu->sr & 0xFFF0u) |
+                     (value == 0u ? SR_ZERO : 0u) |
+                     ((value & 0x80u) ? SR_NEGATIVE : 0u));
+        cpu->cycles += 12u;
+        return MC_OK;
+    }
     /* Deliberate fail-fast instead of pretending to emulate illegal exceptions. */
     return fail(cpu, MC_ERR_OPCODE);
 }

@@ -232,6 +232,28 @@ static int test_new_move_add_dbf(void)
     return 1;
 }
 
+static int test_postincrement_moves(void)
+{
+    uint32_t val;
+    EXPECT(setup());
+    cpu.a[5]=0xFF0010u;
+    cpu.a[4]=0xFF0020u;
+    EXPECT(md_write8(&bus,0xFF0010u,0x81u)==MC_OK);
+    EXPECT(md_write32(&bus,0xFF0011u & ~1u,0x81123456u)==MC_OK);
+    /* Restore byte at 0x10 followed by even long at 0x12. */
+    cpu.a[5]=0xFF0010u;
+    word_at(8,0x1A1Du); /* MOVE.B (A5)+,D5 */
+    EXPECT(m68k_step(&cpu,&bus)==MC_OK);
+    EXPECT((cpu.d[5]&0xFFu)==0x81u && cpu.a[5]==0xFF0011u);
+    cpu.a[5]=0xFF0012u;
+    EXPECT(md_write32(&bus,0xFF0012u,0xDEADBEEFu)==MC_OK);
+    word_at(10,0x289Du); /* MOVE.L (A5)+,(A4) */
+    EXPECT(m68k_step(&cpu,&bus)==MC_OK);
+    EXPECT(md_read32(&bus,0xFF0020u,&val)==MC_OK && val==0xDEADBEEFu);
+    EXPECT(cpu.a[5]==0xFF0016u);
+    return 1;
+}
+
 int main(void)
 {
     const struct { const char *name; int (*fn)(void); } tests[] = {
@@ -247,7 +269,8 @@ int main(void)
         {"ANDI + TMSS", test_andi_move_and_tmss},
         {"MOVE.B displacement", test_move_byte_disp},
         {"Boot probe Sonic sem ROM", test_rom_boot_entry},
-        {"MOVE/ADD/DBF e USP", test_new_move_add_dbf}
+        {"MOVE/ADD/DBF e USP", test_new_move_add_dbf},
+        {"MOVE post-incremento", test_postincrement_moves}
     };
     unsigned passed = 0;
     size_t i;
