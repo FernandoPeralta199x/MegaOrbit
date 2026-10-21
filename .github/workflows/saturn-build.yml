@@ -22,6 +22,8 @@ jobs:
         uses: actions/checkout@v4
       - name: Run CPU, Z80, VDP and audio core tests
         run: make test
+      - name: Create placeholder (no commercial ROM in GitHub)
+        run: python3 scripts/make_sonic_slot.py
       - name: Build Saturn disc using Yaul toolchain
         run: |
           docker run --rm -v "$PWD:/work" -w /work/saturn ijacquez/yaul:1.0.15 bash -lc 'set -eu; make'

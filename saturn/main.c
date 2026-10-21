@@ -3,11 +3,21 @@
  */
 #include <yaul.h>
 #include <stdint.h>
+#include <string.h>
 #include "megacore.h"
 #include "md_emulation.h"
 #include "md_vdp.h"
 #include "scsp_audio.h"
 #include "menu.h"
+/* Embeds a zero-content placeholder; private BIN patch replaces it locally.
+ * The ROM itself is NEVER committed to the public GitHub repository. */
+extern uint8_t asset_sonic_slot[];
+#define SONIC_ROM_SIZE 524288u
+#define SONIC_SLOT_OFFSET 32u
+static unsigned sonic_valid,sonic_steps;
+static uint32_t sonic_start_pc,sonic_end_pc,sonic_start_sp;
+static uint16_t sonic_last_opcode;
+static mc_result_t sonic_status;
 static smpc_peripheral_digital_t pad;
 static ui_state_t ui;
 static md_bus_t bus;
@@ -43,6 +53,25 @@ static void do_diagnostic(void){
      cpu.d[0]==5u&&cpu.d[1]==0xffffffffu&&cpu.d[2]==7u);
  ui.diagnostic_ran=1;
 }
+static void do_sonic(void){
+ const uint8_t *rom=asset_sonic_slot+SONIC_SLOT_OFFSET;
+ unsigned i;
+ sonic_valid=memcmp(rom+0x100u,"SEGA MEGA DRIVE",15u)==0;
+ sonic_steps=0;
+ sonic_start_pc=0;sonic_end_pc=0;sonic_start_sp=0;
+ sonic_last_opcode=0;sonic_status=MC_ERR_UNMAPPED;
+ if(!sonic_valid)return;
+ md_bus_init(&bus,rom,SONIC_ROM_SIZE);
+ sonic_status=m68k_reset(&cpu,&bus);
+ sonic_start_pc=cpu.pc;
+ sonic_start_sp=cpu.a[7];
+ for(i=0u;i<512u&&sonic_status==MC_OK;i++){
+  sonic_status=m68k_step(&cpu,&bus);
+  if(sonic_status==MC_OK)sonic_steps++;
+ }
+ sonic_end_pc=cpu.pc;
+ sonic_last_opcode=cpu.last_opcode;
+}
 static void do_z80(void){
  unsigned i;
  md_z80_init(&z80);
@@ -65,9 +94,12 @@ static void do_vdp(void){
 static void display(void){
  unsigned i,begin=0u,end,n;
  dbgio_printf("\033[H\033[2J");
- dbgio_printf("MEGA ORBIT V0.3.0-DEV\n");
+ dbgio_printf("MEGA ORBIT V0.4.0-DEV\n");
+ dbgio_printf("GENESIS / MEGA DRIVE EMULATOR\n");
+ dbgio_printf("VERSION 1.0.0 [MENU]\n");
+ dbgio_printf("GRIFFONBR\n");
  dbgio_printf("----------------------------\n");
- dbgio_printf("DIAGNOSTICO DE HARDWARE\n\n");
+ dbgio_printf("MENU E DIAGNOSTICO\n\n");
  dbgio_printf("[%s]\n",ui_page_name(ui.page));
  if(ui.page==UI_OPTIONS)dbgio_printf("ABA: %s   ESQ/DIR\n",ui_tab_label(ui.tab));
  dbgio_printf("\n");
@@ -105,7 +137,29 @@ static void display(void){
  if(ui.page==UI_PAUSE)dbgio_printf("\nSTATUS: %s\n",ui.status?ui.status:"");
  if(ui.page==UI_SAVES)dbgio_printf("SAVE STATES NAO DISPONIVEIS\n");
  if(ui.page==UI_CREDITS)dbgio_printf("LIBYAUL + PICODRIVE (REFERENCIA)\n\nNAO AFILIADO A SEGA.\n");
- if(ui.page==UI_ROMS)dbgio_printf("A: DIAGNOSTICO SEM ROM REAL\n");
+ if(ui.page==UI_ROMS){
+  dbgio_printf("\nDIRETORIO: /ROMS/MEGA/\n");
+  dbgio_printf("SONIC THE HEDGEHOG (USA/EUR)\n");
+  dbgio_printf("512 KB - REGIAO JUE\n");
+  dbgio_printf("OUTROS JOGOS: ARQUIVOS AUSENTES\n");
+ }
+ if(ui.page==UI_GAME_TEST){
+  if(sonic_valid){
+   dbgio_printf("SONIC (USA, EUROPE)\n");
+   dbgio_printf("ROM: CARREGADA, 512 KB\n");
+   dbgio_printf("REGIAO: JUE\n");
+   dbgio_printf("PC RESET: %08lX\n",(unsigned long)sonic_start_pc);
+   dbgio_printf("SP RESET: %08lX\n",(unsigned long)sonic_start_sp);
+   dbgio_printf("PASSOS: %u / 512\n",sonic_steps);
+   dbgio_printf("PC STOP: %08lX\n",(unsigned long)sonic_end_pc);
+   dbgio_printf("OPCODE: %04X\n",(unsigned)sonic_last_opcode);
+   dbgio_printf("STATUS: %s\n",mc_result_name(sonic_status));
+   dbgio_printf("JOGO AINDA NAO JOGAVEL\n");
+  }else{
+   dbgio_printf("ROM NAO EMBUTIDA NESTE DISCO\n");
+   dbgio_printf("USE PACOTE PRIVADO COM ROM\n");
+  }
+ }
  dbgio_printf("\n----------------------------\n");
  dbgio_printf("D-PAD NAVEGAR  A/C OK  B VOLTAR\n");
  dbgio_printf("VDP/Z80/FM AINDA INCOMPLETOS\n");
@@ -134,6 +188,8 @@ int main(void){
   }
   if(ui.page==UI_DIAGNOSTIC&&(!ui.diagnostic_ran||last!=UI_DIAGNOSTIC))
    do_diagnostic();
+  if(ui.page==UI_GAME_TEST&&last!=UI_GAME_TEST)
+   do_sonic();
   if(sound_active&&ui.page!=UI_OPTIONS){megaorbit_scsp_stop();sound_active=0;}
   display();dbgio_flush();vdp2_sync();vdp2_sync_wait();
  }
