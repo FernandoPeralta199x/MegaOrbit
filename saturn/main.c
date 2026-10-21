@@ -9,6 +9,7 @@
 #include "md_emulation.h"
 #include "md_vdp.h"
 #include "scsp_audio.h"
+#include "ui_background.h"
 #include "menu.h"
 /* Embeds a zero-content placeholder; private BIN patch replaces it locally.
  * The ROM itself is NEVER committed to the public GitHub repository. */
@@ -243,7 +244,7 @@ static void display(void){
 }
 int main(void){
  dbgio_init();dbgio_dev_default_init(DBGIO_DEV_VDP2_ASYNC);dbgio_dev_font_load();
- ui_init(&ui);do_z80();do_vdp();
+ ui_init(&ui);do_z80();do_vdp();megaorbit_ui_background_init();
  for(;;){
   ui_page_t last=ui.page;
   smpc_peripheral_process();smpc_peripheral_digital_port(1,&pad);
@@ -278,6 +279,7 @@ int main(void){
   if(ui.page==UI_HOMEBREW&&!ui.diagnostic_ran)homebrew_start();
   if(ui.page==UI_HOMEBREW&&last==UI_HOMEBREW)homebrew_frame();
   if(sound_active&&ui.page!=UI_OPTIONS){megaorbit_scsp_stop();sound_active=0;}
+  megaorbit_ui_background_selection(&ui);
   display();dbgio_flush();vdp2_sync();vdp2_sync_wait();
  }
 }
