@@ -55,7 +55,7 @@ def raw_mode1_sector(lba, payload):
     if m > 99:
         raise ValueError("Disc exceeds MSF addressing limit")
     sector = bytearray(2352)
-    sector[0:12] = b"\\x00" + (b"\\xff" * 10) + b"\\x00"
+    sector[0:12] = b"\x00" + (b"\xff" * 10) + b"\x00"
     sector[12:16] = bytes((bcd(m), bcd(s), bcd(f), 1))
     sector[16:2064] = payload
     checksum = 0
@@ -95,9 +95,9 @@ def main():
             for lba in range(size // 2048):
                 out.write(raw_mode1_sector(lba, source.read(2048)))
     cue.write_text(
-        f'FILE "{target.name}" BINARY\\n'
-        '  TRACK 01 MODE1/2352\\n'
-        '    INDEX 01 00:00:00\\n',
+        f'FILE "{target.name}" BINARY\n'
+        '  TRACK 01 MODE1/2352\n'
+        '    INDEX 01 00:00:00\n',
         encoding="ascii"
     )
     print(f"OK: {iso} ({size} bytes) -> {target} ({target.stat().st_size} bytes)")
