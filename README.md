@@ -14,6 +14,18 @@ Abra **MegaOrbit.cue**, mantendo **MegaOrbit.bin** na mesma pasta, no Mednafen/B
 
 **Status de validação:** o código compilou para SH-2 e o disco passou nos verificadores; a execução visual com BIOS num emulador Saturn ou hardware real ainda precisa de teste manual. Não há execução de ROMs Mega Drive comerciais ou acesso ao cartão SD.
 
+## MegaOrbit 0.3.0-dev — Bin/Cue com testes de chips
+
+- [Build de diagnóstico SH-2 no GitHub Actions](https://github.com/FernandoPeralta199x/MegaOrbit/actions/runs/39532053253) — baixar o artifact MegaOrbit-Saturn-BIN-CUE.
+- [Pesquisa técnica Saturn / Mega Drive / PicoDrive](docs/CHIPS_E_PICODRIVE.md).
+- [PicoDrive](third_party/picodrive) como submódulo opcional e não linkado, sujeito à licença MAME antiga.
+- O C99 próprio contém 68000 parcial, Z80 parcial, PSG inicial, aproximação FM, VDP simplificado e teste de PCM para SCSP.
+- Navegação Saturn: D-Pad; A/C confirmar; B voltar; L+R+Start abre pausa na tela de diagnóstico.
+- Abas Vídeo, Áudio, Hardware e Controles exibem testes; Áudio A/C solicita PCM looping no SCSP, B interrompe.
+- Os 12 testes 68000 e a suíte de hardware passam no PC; o build SH-2 e a validação estrutural BIN/CUE passaram. **Nenhuma execução audiovisual em hardware real foi certificada nesta entrega.**
+
+**Este pacote não executa ROMs de jogos e não é um port funcional de PicoDrive.**
+
 ## O que funciona nesta entrega
 
 - Reset da CPU 68000 por vetores: A7 em ROM[0..3] e PC em ROM[4..7].
