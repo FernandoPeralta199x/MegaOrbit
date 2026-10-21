@@ -18,13 +18,13 @@ def main():
         first = f.read(2352)
         f.seek(16 * 2352)
         pvd = f.read(2352)
-    if first[:12] != b"\\x00" + b"\\xff"*10 + b"\\x00":
+    if first[:12] != b"\x00" + b"\xff"*10 + b"\x00":
         raise SystemExit("Invalid CD sync")
     if first[12:16] != bytes((0x00, 0x02, 0x00, 0x01)):
         raise SystemExit("Incorrect MODE1 first-sector time/mode")
     if first[16:32] != b"SEGA SEGASATURN ":
         raise SystemExit("Sega Saturn boot identifier missing")
-    if pvd[16:23] != b"\\x01CD001\\x01":
+    if pvd[16:23] != b"\x01CD001\x01":
         raise SystemExit("ISO9660 PVD at LBA16 missing")
     print(f"PASS: Saturn boot, ISO9660 volume, CUE; {size // 2352} sectors")
     print("NOTE: structural verification only; no Saturn emulator run was performed.")
