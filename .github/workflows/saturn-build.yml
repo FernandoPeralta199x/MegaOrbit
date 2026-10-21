@@ -36,6 +36,28 @@ jobs:
       - name: Validate resulting disc image
         run: |
           python3 scripts/validate_disc.py release/MegaOrbit.bin release/MegaOrbit.cue
+      - name: Smoke test offline ROM injection using synthetic data
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('/tmp/megaorbit_synthetic.md')
+          data = bytearray(524288)
+          data[0x100:0x10f] = b'SEGA MEGA DRIVE'
+          data[0x200:0x208] = b'NO_GAME!'
+          p.write_bytes(data)
+          PY
+          python3 scripts/patch_private_rom.py --bin release/MegaOrbit.bin --rom /tmp/megaorbit_synthetic.md --out /tmp/megaorbit_patched/MegaOrbit.bin
+          cp release/MegaOrbit.cue /tmp/megaorbit_patched/MegaOrbit.cue
+          python3 scripts/validate_disc.py /tmp/megaorbit_patched/MegaOrbit.bin /tmp/megaorbit_patched/MegaOrbit.cue
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('/tmp/megaorbit_patched/MegaOrbit.bin').read_bytes()
+          data=b''.join(p[i*2352+16:i*2352+2064] for i in range(len(p)//2352))
+          signature=b'MEGAORBIT-SONIC-SLOT-V1'.ljust(32,b'\0')
+          offset=data.find(signature)
+          assert offset>=0 and data[offset+32+0x100:offset+32+0x10f]==b'SEGA MEGA DRIVE'
+          print('PASS: private injection smoke-test; no proprietary ROM in CI')
+          PY
       - name: Upload emulator-ready image
         uses: actions/upload-artifact@v4
         with:
