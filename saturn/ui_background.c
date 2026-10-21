@@ -16,7 +16,7 @@
 #define BG_VRAM VDP2_VRAM_ADDR(0,0)
 static uint8_t *const pixels=(uint8_t *)BG_VRAM;
 static uint16_t rgb(unsigned r,unsigned g,unsigned b){
- return RGB1555(1,r,g,b);
+ return RGB1555(1,r,g,b).raw;
 }
 static void pixel(unsigned x,unsigned y,uint8_t index){
  if(x<BG_VISIBLE&&y<BG_HEIGHT)pixels[y*BG_WIDTH+x]=index;
