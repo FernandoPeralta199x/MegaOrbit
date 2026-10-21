@@ -15,6 +15,8 @@
 #define BG_PALETTE VDP2_CRAM_MODE_0_OFFSET(0, 0, 0)
 #define BG_VRAM VDP2_VRAM_ADDR(0,0)
 static uint8_t *const pixels=(uint8_t *)BG_VRAM;
+static int last_dimmed=-1;
+static uint16_t original_palette[26];
 static uint16_t rgb(unsigned r,unsigned g,unsigned b){
  return RGB1555(1,r,g,b).raw;
 }
@@ -93,6 +95,7 @@ void megaorbit_ui_background_init(void){
  palette[20]=rgb(4,23,31);
  palette[21]=rgb(0,10,19);
  palette[25]=rgb(23,23,31);
+ for(i=0;i<26u;i++)original_palette[i]=palette[i];
  background();
  /* VRAM bank 0 for NBG1 bitmap, bank 3 remains DBGIO NBG3. */
  cycle=vdp2_vram_cycp_get();
@@ -111,14 +114,29 @@ void megaorbit_ui_background_init(void){
 }
 void megaorbit_ui_background_selection(const ui_state_t *ui){
  unsigned i,index=ui->cursor;
+ int dimmed=(ui->page==UI_PAUSE);
+ volatile uint16_t *palette=(volatile uint16_t *)BG_PALETTE;
+ if(dimmed!=last_dimmed) {
+  /* Pause darkens the pixel-art layer; NBG3 foreground text remains legible.
+     This is an overlay effect, not a capture of the emulated game framebuffer. */
+  for(i=0;i<26u;i++){
+   uint16_t raw=original_palette[i];
+   if(dimmed){
+    unsigned r=(raw>>10)&31u,g=(raw>>5)&31u,b=raw&31u;
+    palette[i]=(uint16_t)((raw&0x8000u)|((r>>1)<<10)|((g>>1)<<5)|(b>>1));
+   }else palette[i]=raw;
+  }
+  last_dimmed=dimmed;
+ }
  /* Selection stripe follows the row selected in the Saroo-like listing. */
- if(ui->page!=UI_MAIN && ui->page!=UI_ROMS &&
-    ui->page!=UI_OPTIONS && ui->page!=UI_PAUSE)return;
+ /* Clear old stripe when changing screens, not just while in a menu. */
  for(i=0;i<9u;i++){
   unsigned y=48u+i*8u;
   rect(2u,y,317u,y+8u,6u);
  }
- if(index<9u){
+ if(index<9u &&
+    (ui->page==UI_MAIN || ui->page==UI_ROMS ||
+     ui->page==UI_OPTIONS || ui->page==UI_PAUSE)){
   unsigned y=48u+index*8u;
   rect(3u,y,317u,y+8u,21u);
   rect(3u,y,6u,y+8u,20u);
