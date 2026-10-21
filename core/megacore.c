@@ -31,6 +31,16 @@ mc_result_t
 md_read8(const md_bus_t *bus, uint32_t address, uint8_t *value)
 {
     address &= BUS_MASK;
+    /* Minimal immediate Z80 BUSREQ response. Real 68000/Z80 bus arbitration
+       requires elapsed cycles and a scheduler and is NOT yet implemented. */
+    if (address == 0x00A11100u) {
+        *value = (bus->z80_busreq & 0x0100u) ? 0x00u : 0x01u;
+        return MC_OK;
+    }
+    if (address == 0x00A11200u) {
+        *value = (bus->z80_reset & 0x0100u) ? 0x01u : 0x00u;
+        return MC_OK;
+    }
     if (address >= 0x00A10000u && address <= 0x00A1001Fu) {
         *value = bus->io[address - 0x00A10000u];
         return MC_OK;
@@ -566,6 +576,19 @@ m68k_step(m68k_t *cpu, md_bus_t *bus)
                      (value == 0u ? SR_ZERO : 0u) |
                      ((value & 0x80u) ? SR_NEGATIVE : 0u));
         cpu->cycles += 12u;
+        return MC_OK;
+    }
+    /* BTST Dn,(An): controller and Z80 arbitration polling instruction.
+       Only the Z condition flag changes; the tested bit is Dn & 7. */
+    if ((op & 0xF1F8u) == 0x0110u) {
+        unsigned dest = op & 7u, src = (op >> 9u) & 7u;
+        unsigned bit = cpu->d[src] & 7u;
+        uint8_t data;
+        r = md_read8(bus,cpu->a[dest],&data);
+        if (r != MC_OK) return fail(cpu,r);
+        cpu->sr &= (uint16_t)~SR_ZERO;
+        if ((data & (uint8_t)(1u << bit)) == 0u) cpu->sr |= SR_ZERO;
+        cpu->cycles += 8u;
         return MC_OK;
     }
     /* Deliberate fail-fast instead of pretending to emulate illegal exceptions. */

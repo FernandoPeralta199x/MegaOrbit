@@ -254,6 +254,22 @@ static int test_postincrement_moves(void)
     return 1;
 }
 
+static int test_btst_z80_busreq(void)
+{
+    uint8_t value;
+    EXPECT(setup());
+    cpu.a[1] = 0xA11100u;
+    cpu.d[0] = 0u; /* Test bit 0 */
+    word_at(8, 0x0111u);
+    EXPECT(md_read8(&bus,0xA11100u,&value)==MC_OK && value==1u);
+    EXPECT(m68k_step(&cpu,&bus)==MC_OK && (cpu.sr & 4u)==0u);
+    EXPECT(md_write16(&bus,0xA11100u,0x0100u)==MC_OK);
+    word_at(10,0x0111u);
+    EXPECT(md_read8(&bus,0xA11100u,&value)==MC_OK && value==0u);
+    EXPECT(m68k_step(&cpu,&bus)==MC_OK && (cpu.sr & 4u)!=0u);
+    return 1;
+}
+
 int main(void)
 {
     const struct { const char *name; int (*fn)(void); } tests[] = {
@@ -270,7 +286,8 @@ int main(void)
         {"MOVE.B displacement", test_move_byte_disp},
         {"Boot probe Sonic sem ROM", test_rom_boot_entry},
         {"MOVE/ADD/DBF e USP", test_new_move_add_dbf},
-        {"MOVE post-incremento", test_postincrement_moves}
+        {"MOVE post-incremento", test_postincrement_moves},
+        {"BTST + BUSREQ Z80", test_btst_z80_busreq}
     };
     unsigned passed = 0;
     size_t i;
