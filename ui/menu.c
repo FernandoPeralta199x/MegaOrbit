@@ -1,113 +1,73 @@
 #include "menu.h"
+#include <stdio.h>
 #include <string.h>
-
-static const char *const main_items[4] = {
-    "SELECIONAR JOGO", "OPCOES DE SISTEMA", "GERENCIADOR DE SAVES", "CREDITOS"
-};
-static const char *const tabs[4] = {"VIDEO", "AUDIO", "HARDWARE", "CONTROLES"};
-static const char *const rom_items[1] = {"ROM SINTETICA - TESTE CPU"};
-static const char *const video_items[3] = {
-    "SAIDA SATURN: 320x224", "PROPORCAO: 4:3", "FILTROS: NAO DISPONIVEIS"
-};
-static const char *const audio_items[2] = {
-    "YM2612: EM DESENVOLVIMENTO", "PSG: EM DESENVOLVIMENTO"
-};
-static const char *const hardware_items[3] = {
-    "68000: PARCIAL", "Z80: EM DESENVOLVIMENTO", "VDP: EM DESENVOLVIMENTO"
-};
-static const char *const controls_items[3] = {
-    "D-PAD: NAVEGAR", "A/C: CONFIRMAR", "B: VOLTAR"
-};
-
-void ui_init(ui_state_t *ui)
-{
-    memset(ui, 0, sizeof(*ui));
-    ui->page = UI_MAIN;
+static const char *const main_items[]={"SELECIONAR JOGO","OPCOES DE SISTEMA","GERENCIADOR DE SAVES","CREDITOS"};
+static const char *const tabs[]={"VIDEO","AUDIO","HARDWARE","CONTROLES"};
+static const char *const vid[]={"VDP MEGA: TILES (TESTE)","VDP SATURN: VDP2 (TEXTO)","VRAM 64K + CRAM + VSRAM"};
+static const char *const aud[]={"PSG: TOM SINTETIZADO","YM2612: FM APROXIMADA","SCSP: TESTE PCM 16-BIT","A/C: TOCAR SOM (LOOP)"};
+static const char *const hw[]={"68000: PARCIAL","Z80: 10 OPCODES TESTE","VDP: TILES E PALETAS","PicoDrive: SUBMODULO"};
+static const char *const controls[]={"D-PAD -> D-PAD","A -> A","B -> B","C -> C","X -> X","Y -> Y","Z -> Z","START -> START","MENU: L + R + START"};
+static const char *const pause[]={"CONTINUAR","SALVAR ESTADO","CARREGAR ESTADO","", "RESETAR TESTE","VOLTAR AO MENU"};
+void ui_init(ui_state_t *u){memset(u,0,sizeof(*u));u->page=UI_MAIN;u->save_slot=1;u->status="PRONTO";}
+const char *ui_page_name(ui_page_t p){
+ switch(p){case UI_MAIN:return "MENU PRINCIPAL";case UI_ROMS:return "SELECIONAR JOGO";case UI_OPTIONS:return "OPCOES DE SISTEMA";case UI_SAVES:return "GERENCIADOR DE SAVES";case UI_CREDITS:return "CREDITOS";case UI_DIAGNOSTIC:return "DIAGNOSTICO 68000";case UI_PAUSE:return "JOGO PAUSADO";default:return "ERRO";}
 }
-
-const char *ui_page_name(ui_page_t page)
-{
-    switch (page) {
-    case UI_MAIN: return "MENU PRINCIPAL";
-    case UI_ROMS: return "SELECIONAR JOGO";
-    case UI_OPTIONS: return "OPCOES DE SISTEMA";
-    case UI_SAVES: return "GERENCIADOR DE SAVES";
-    case UI_CREDITS: return "CREDITOS";
-    case UI_DIAGNOSTIC: return "DIAGNOSTICO 68000";
-    default: return "DESCONHECIDO";
-    }
+const char *ui_tab_label(unsigned t){return tabs[t%4u];}
+unsigned ui_item_count(const ui_state_t *u){
+ if(u->page==UI_MAIN)return 4;
+ if(u->page==UI_ROMS)return 1;
+ if(u->page==UI_PAUSE)return 6;
+ if(u->page==UI_OPTIONS)return u->tab==0?3u:(u->tab==1?4u:(u->tab==2?4u:9u));
+ return 0;
 }
-const char *ui_tab_label(unsigned int tab) { return tabs[tab % 4u]; }
-unsigned int ui_item_count(const ui_state_t *ui)
-{
-    switch (ui->page) {
-    case UI_MAIN: return 4u;
-    case UI_ROMS: return 1u;
-    case UI_OPTIONS:
-        switch (ui->tab) {
-        case 0: return 3u;
-        case 1: return 2u;
-        case 2: return 3u;
-        default: return 3u;
-        }
-    default: return 0u;
-    }
+const char *ui_item_label(const ui_state_t *u,unsigned n){
+ static char slot[24];
+ if(n>=ui_item_count(u))return "";
+ if(u->page==UI_MAIN)return main_items[n];
+ if(u->page==UI_ROMS)return "ROM SINTETICA 68000";
+ if(u->page==UI_PAUSE){
+  if(n==3){snprintf(slot,sizeof(slot),"SLOT [ %02u ]",u->save_slot);return slot;}
+  return pause[n];
+ }
+ if(u->tab==0)return vid[n];
+ if(u->tab==1)return aud[n];
+ if(u->tab==2)return hw[n];
+ return controls[n];
 }
-const char *ui_item_label(const ui_state_t *ui, unsigned int index)
-{
-    const char *const *items = 0;
-    unsigned int size = ui_item_count(ui);
-    if (index >= size) return "";
-    switch (ui->page) {
-    case UI_MAIN: items=main_items; break;
-    case UI_ROMS: items=rom_items; break;
-    case UI_OPTIONS:
-        switch (ui->tab) {
-        case 0: items=video_items; break;
-        case 1: items=audio_items; break;
-        case 2: items=hardware_items; break;
-        default: items=controls_items; break;
-        }
-        break;
-    default: return "";
-    }
-    return items[index];
-}
-void ui_handle(ui_state_t *ui, ui_input_t input)
-{
-    unsigned int count = ui_item_count(ui);
-    if (input == UI_INPUT_BACK) {
-        if (ui->page == UI_DIAGNOSTIC) {
-            ui->page = UI_ROMS;
-            ui->cursor = 0;
-        } else if (ui->page != UI_MAIN) {
-            ui->page = UI_MAIN;
-            ui->cursor = ui->last_main;
-        }
-        return;
-    }
-    if (input == UI_INPUT_LEFT || input == UI_INPUT_RIGHT) {
-        if (ui->page == UI_OPTIONS) {
-            ui->tab = (unsigned char)((ui->tab + (input == UI_INPUT_LEFT ? 3u : 1u)) % 4u);
-            ui->cursor = 0u;
-        }
-        return;
-    }
-    if (input == UI_INPUT_UP || input == UI_INPUT_DOWN) {
-        if (count == 0u) return;
-        if (input == UI_INPUT_UP)
-            ui->cursor = (unsigned char)((ui->cursor + count - 1u) % count);
-        else
-            ui->cursor = (unsigned char)((ui->cursor + 1u) % count);
-        return;
-    }
-    if (input != UI_INPUT_ACCEPT) return;
-    if (ui->page == UI_MAIN) {
-        ui->last_main = ui->cursor;
-        ui->page = (ui_page_t)(ui->cursor + 1u);
-        ui->cursor = 0u;
-    } else if (ui->page == UI_ROMS) {
-        ui->page = UI_DIAGNOSTIC;
-        ui->diagnostic_ran = 0u;
-    }
+void ui_handle(ui_state_t *u,ui_input_t in){
+ unsigned count=ui_item_count(u);
+ if(in==UI_INPUT_PAUSE){
+  if(u->page==UI_DIAGNOSTIC){u->paused_from=u->page;u->page=UI_PAUSE;u->cursor=0;u->status="MENU DE PAUSA";}
+  else if(u->page==UI_PAUSE){u->page=u->paused_from;u->cursor=0;u->status="CONTINUAR";}
+  return;
+ }
+ if(in==UI_INPUT_BACK){
+  if(u->page==UI_PAUSE){u->page=u->paused_from;u->cursor=0;}
+  else if(u->page==UI_DIAGNOSTIC){u->page=UI_ROMS;u->cursor=0;}
+  else if(u->page!=UI_MAIN){u->page=UI_MAIN;u->cursor=u->last_main;}
+  return;
+ }
+ if(in==UI_INPUT_LEFT||in==UI_INPUT_RIGHT){
+  if(u->page==UI_OPTIONS){u->tab=(unsigned char)((u->tab+(in==UI_INPUT_LEFT?3u:1u))%4u);u->cursor=0;}
+  else if(u->page==UI_PAUSE&&u->cursor==3u)
+    u->save_slot=(unsigned char)((u->save_slot+(in==UI_INPUT_LEFT?7u:1u))%9u+1u);
+  return;
+ }
+ if(in==UI_INPUT_UP||in==UI_INPUT_DOWN){
+  if(count)u->cursor=(unsigned char)((u->cursor+(in==UI_INPUT_UP?count-1u:1u))%count);
+  return;
+ }
+ if(in!=UI_INPUT_ACCEPT)return;
+ if(u->page==UI_MAIN){u->last_main=u->cursor;u->page=(ui_page_t)(u->cursor+1u);u->cursor=0;}
+ else if(u->page==UI_ROMS){u->page=UI_DIAGNOSTIC;u->diagnostic_ran=0;}
+ else if(u->page==UI_PAUSE){
+  switch(u->cursor){
+  case 0:u->page=u->paused_from;u->cursor=0;break;
+  case 1:u->status="SAVE STATE NAO IMPLEMENTADO";break;
+  case 2:u->status="LOAD STATE NAO IMPLEMENTADO";break;
+  case 3:u->save_slot=(unsigned char)(u->save_slot%9u+1u);break;
+  case 4:u->diagnostic_ran=0;u->page=u->paused_from;u->cursor=0;break;
+  case 5:u->page=UI_MAIN;u->cursor=0;break;
+  }
+ }
 }
